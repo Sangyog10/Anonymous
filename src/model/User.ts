@@ -1,5 +1,4 @@
 import mongoose, { Schema, Document } from "mongoose";
-import { ST } from "next/dist/shared/lib/utils";
 
 export interface Message extends Document {
   content: string;
