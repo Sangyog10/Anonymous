@@ -66,8 +66,6 @@ export default function SignUpForm() {
   }, [username]);
 
   const onSubmit = async (data: z.infer<typeof signUpSchema>) => {
-    console.log("on submit form clicked");
-
     setIsSubmitting(true);
     try {
       const response = await axios.post<ApiResponse>("/api/signup", data);
@@ -82,11 +80,10 @@ export default function SignUpForm() {
       setIsSubmitting(false);
     } catch (error) {
       console.error("Error during sign-up:", error);
-
       const axiosError = error as AxiosError<ApiResponse>;
-
-      let errorMessage = axiosError.response?.data.message;
-      ("There was a problem with your sign-up. Please try again.");
+      let errorMessage =
+        axiosError.response?.data.message ||
+        "There was a problem with your sign-up. Please try again.";
 
       toast({
         title: "Sign Up Failed",
@@ -103,7 +100,7 @@ export default function SignUpForm() {
       <div className="w-full max-w-md p-8 space-y-8 bg-white rounded-lg shadow-md">
         <div className="text-center">
           <h1 className="text-4xl font-extrabold tracking-tight lg:text-5xl mb-6">
-            Get Real Feedback
+            Enjoy Ananymous Chat
           </h1>
           <p className="mb-4">Sign up to start your anonymous adventure</p>
         </div>

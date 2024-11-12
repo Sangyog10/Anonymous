@@ -7,7 +7,6 @@ import { acceptMessagesSchema } from "@/schemas/acceptMessageSchema";
 import { ApiResponse } from "@/types/apiResponse";
 import { zodResolver } from "@hookform/resolvers/zod";
 import axios, { AxiosError } from "axios";
-import { User } from "next-auth";
 import { useSession } from "next-auth/react";
 import { useCallback, useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
@@ -16,7 +15,7 @@ import { Separator } from "@/components/ui/separator";
 import { Loader2, RefreshCcw } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 
-export const dashboard = () => {
+const dashboard = () => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isSwitchLoading, setIsSwitchLoading] = useState(false);
@@ -56,7 +55,7 @@ export const dashboard = () => {
   const fetchMessages = useCallback(
     async (refresh: boolean = false) => {
       setIsLoading(true);
-      setIsSwitchLoading(false);
+      setIsSwitchLoading(true);
       try {
         const response = await axios.get<ApiResponse>(`/api/get-messages`);
         setMessages(response.data.messages || []);
@@ -109,8 +108,13 @@ export const dashboard = () => {
     }
   };
 
-  const { username } = session?.user as User;
-  const baseUrl = `${window.location.protocol}//${window.location.host}`;
+  // const { username } = session?.user as User;
+  const username = session?.user.username;
+  let baseUrl = "";
+  if (typeof window !== "undefined") {
+    baseUrl = `${window.location.protocol}//${window.location.host}`;
+  }
+  // const baseUrl = `${window.location.protocol}//${window.location.host}`;
   const profileUrl = `${baseUrl}/u/${username}`;
 
   const copyToClipboard = () => {
@@ -173,8 +177,7 @@ export const dashboard = () => {
         {messages.length > 0 ? (
           messages.map((message, index) => (
             <MessageCard
-              key={message.id}
-              // key={message._id}
+              key={message._id as string}
               message={message}
               onMessageDelete={handleDeleteMessage}
             />
@@ -186,3 +189,5 @@ export const dashboard = () => {
     </div>
   );
 };
+
+export default dashboard;
