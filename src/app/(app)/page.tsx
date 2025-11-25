@@ -157,7 +157,7 @@ export default function Home() {
               <AccordionItem value="item-3" className="border-gray-700">
                 <AccordionTrigger className="text-lg hover:text-blue-400">Can I report abusive messages?</AccordionTrigger>
                 <AccordionContent className="text-gray-400">
-                  Yes, you can delete any message you don't like. We are also working on reporting features to keep the platform safe.
+                  Yes, you can delete any message you don&apos;t like. We are also working on reporting features to keep the platform safe.
                 </AccordionContent>
               </AccordionItem>
             </Accordion>
