@@ -6,7 +6,7 @@ export async function POST(request: Request) {
   await dbConnect();
   const { username, content } = await request.json();
   try {
-    const user = await UserModel.findOne({ username });
+    const user = await UserModel.findOne({ username: { $regex: new RegExp(`^${username}$`, "i") } });
     if (!user) {
       return Response.json(
         {

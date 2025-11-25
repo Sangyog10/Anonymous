@@ -3,17 +3,17 @@
 import { useSession, signOut } from "next-auth/react";
 import Link from "next/link";
 import { User } from "next-auth";
-import { Button } from "@react-email/components";
+import { Button } from "@/components/ui/button";
 
 export const Navbar = () => {
   const { data: session } = useSession();
-  const user: User = session?.user;
+  const user: User = session?.user as User;
   return (
     <nav className="p-4 md:p-6 shadow-md bg-gray-900 text-white">
       <div className="container mx-auto flex flex-col md:flex-row justify-between items-center">
-        <a href="/" className="text-xl font-bold mb-4 md:mb-0">
+        <Link href="/" className="text-xl font-bold mb-4 md:mb-0">
           Anynomous
-        </a>
+        </Link>
         {session ? (
           <>
             <span className="mr-4">
@@ -27,12 +27,11 @@ export const Navbar = () => {
             </Button>
           </>
         ) : (
-          <Button
-            href="/signin"
-            className="w-full md:w-auto bg-slate-100 text-black"
-          >
-            Login
-          </Button>
+          <Link href="/signin">
+            <Button className="w-full md:w-auto bg-slate-100 text-black">
+              Login
+            </Button>
+          </Link>
         )}
       </div>
     </nav>

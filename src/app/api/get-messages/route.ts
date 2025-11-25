@@ -5,7 +5,7 @@ import UserModel from "@/model/User";
 import { User } from "next-auth";
 import mongoose from "mongoose";
 
-export async function GET(request: Request) {
+export async function GET() {
   await dbConnect();
   const session = await getServerSession(authOptions);
   const _user: User = session?.user;
@@ -39,10 +39,10 @@ export async function GET(request: Request) {
     if (!user || user.length === 0) {
       return Response.json(
         {
-          success: false,
-          message: "No User Messages Found",
+          success: true,
+          messages: [],
         },
-        { status: 401 }
+        { status: 200 }
       );
     }
     return Response.json(

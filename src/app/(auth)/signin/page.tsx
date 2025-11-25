@@ -2,7 +2,7 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import Link from "next/link";
-import { useState } from "react";
+
 import { useForm } from "react-hook-form";
 import * as z from "zod";
 import { Button } from "@/components/ui/button";
@@ -43,8 +43,7 @@ export default function SignInForm() {
         description: "Incorrect credential",
         variant: "destructive",
       });
-    }
-    if (result?.url) {
+    } else {
       router.replace("/dashboard");
     }
   };
@@ -90,7 +89,7 @@ export default function SignInForm() {
         </Form>
         <div className="text-center mt-4">
           <p>
-            Don't have an account?{" "}
+            Don&apos;t have an account?{" "}
             <Link href="/signup" className="text-blue-600 hover:text-blue-800">
               Sign Up
             </Link>

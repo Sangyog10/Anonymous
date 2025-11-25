@@ -15,14 +15,14 @@ import { Separator } from "@/components/ui/separator";
 import { Loader2, RefreshCcw } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 
-const dashboard = () => {
+const Dashboard = () => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isSwitchLoading, setIsSwitchLoading] = useState(false);
   const { toast } = useToast();
 
   const handleDeleteMessage = (messageId: string) => {
-    setMessages(messages.filter((msg) => msg._id !== messageId));
+    setMessages(messages.filter((msg) => String(msg._id) !== messageId));
   };
 
   const { data: session } = useSession();
@@ -50,7 +50,7 @@ const dashboard = () => {
     } finally {
       setIsSwitchLoading(false);
     }
-  }, [setValue]);
+  }, [setValue, toast]);
 
   const fetchMessages = useCallback(
     async (refresh: boolean = false) => {
@@ -78,7 +78,7 @@ const dashboard = () => {
         setIsSwitchLoading(false);
       }
     },
-    [setIsLoading, setMessages]
+    [setIsLoading, setMessages, toast]
   );
 
   useEffect(() => {
@@ -135,6 +135,9 @@ const dashboard = () => {
 
       <div className="mb-4">
         <h2 className="text-lg font-semibold mb-2">Copy Your Unique Link</h2>{" "}
+        <p className="text-sm text-gray-500 mb-3">
+          You can share this link with others to accept messages from them
+        </p>
         <div className="flex items-center">
           <input
             type="text"
@@ -175,9 +178,9 @@ const dashboard = () => {
       </Button>
       <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-6">
         {messages.length > 0 ? (
-          messages.map((message, index) => (
+          messages.map((message) => (
             <MessageCard
-              key={message._id as string}
+              key={String(message._id)}
               message={message}
               onMessageDelete={handleDeleteMessage}
             />
@@ -190,4 +193,4 @@ const dashboard = () => {
   );
 };
 
-export default dashboard;
+export default Dashboard;
