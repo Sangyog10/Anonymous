@@ -7,7 +7,6 @@ import { useForm } from "react-hook-form";
 import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
-import { CardHeader, CardContent, Card } from "@/components/ui/card";
 import {
   Form,
   FormControl,
@@ -24,21 +23,21 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { messageSchema } from "@/schemas/messageSchema";
 
-const specialChar = "||";
+// const specialChar = "||";
 
-const parseStringMessages = (messageString: string): string[] => {
-  return messageString.split(specialChar);
-};
+// const parseStringMessages = (messageString: string): string[] => {
+//   return messageString.split(specialChar);
+// };
 
-const initialMessageString =
-  "What's your favorite movie?||Do you have any pets?||What's your dream job?";
+// const initialMessageString =
+//   "What's your favorite movie?||Do you have any pets?||What's your dream job?";
 
 export default function SendMessage() {
   const params = useParams<{ username: string }>();
   const username = params.username;
 
   const [isLoading, setIsLoading] = useState(false);
-  const [isSuggestLoading, setIsSuggestLoading] = useState(false);
+  // const [isSuggestLoading, setIsSuggestLoading] = useState(false);
 
   const form = useForm<z.infer<typeof messageSchema>>({
     resolver: zodResolver(messageSchema),
@@ -46,39 +45,39 @@ export default function SendMessage() {
 
   const messageContent = form.watch("content");
 
-  const handleMessageClick = (message: string) => {
-    form.setValue("content", message);
-  };
+  // const handleMessageClick = (message: string) => {
+  //   form.setValue("content", message);
+  // };
 
-  const [suggestedMessages, setSuggestedMessages] = useState<string[]>(
-    parseStringMessages(initialMessageString)
-  );
+  // const [suggestedMessages, setSuggestedMessages] = useState<string[]>(
+  //   parseStringMessages(initialMessageString)
+  // );
 
-  const fetchSuggestedMessages = async () => {
-    setIsSuggestLoading(true);
-    try {
-      const response = await axios.post("/api/suggest-message");
-      // Handle both string (separated by ||) and array responses
-      let messages: string[] = [];
-      if (response.data.questions) {
-        if (Array.isArray(response.data.questions)) {
-          messages = response.data.questions;
-        } else if (typeof response.data.questions === "string") {
-          messages = parseStringMessages(response.data.questions);
-        }
-      }
-      setSuggestedMessages(messages);
-    } catch (error) {
-      console.error("Error fetching messages:", error);
-      toast({
-        title: "Error",
-        description: "Failed to fetch suggested messages",
-        variant: "destructive",
-      });
-    } finally {
-      setIsSuggestLoading(false);
-    }
-  };
+  // const fetchSuggestedMessages = async () => {
+  //   setIsSuggestLoading(true);
+  //   try {
+  //     const response = await axios.post("/api/suggest-message");
+  //     // Handle both string (separated by ||) and array responses
+  //     let messages: string[] = [];
+  //     if (response.data.questions) {
+  //       if (Array.isArray(response.data.questions)) {
+  //         messages = response.data.questions;
+  //       } else if (typeof response.data.questions === "string") {
+  //         messages = parseStringMessages(response.data.questions);
+  //       }
+  //     }
+  //     setSuggestedMessages(messages);
+  //   } catch (error) {
+  //     console.error("Error fetching messages:", error);
+  //     toast({
+  //       title: "Error",
+  //       description: "Failed to fetch suggested messages",
+  //       variant: "destructive",
+  //     });
+  //   } finally {
+  //     setIsSuggestLoading(false);
+  //   }
+  // };
 
   const onSubmit = async (data: z.infer<typeof messageSchema>) => {
     setIsLoading(true);
