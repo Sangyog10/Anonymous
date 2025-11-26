@@ -145,7 +145,7 @@ export default function SendMessage() {
         </form>
       </Form>
 
-      <div className="space-y-4 my-8">
+      {/* <div className="space-y-4 my-8">
         <div className="space-y-2">
           <Button
             onClick={fetchSuggestedMessages}
@@ -180,10 +180,10 @@ export default function SendMessage() {
             ))}
           </CardContent>
         </Card>
-      </div>
+      </div> */}
       <Separator className="my-6" />
       <div className="text-center">
-        <div className="mb-4">Get Your Message Board</div>
+        <div className="mb-4">Create your profile and share the links with other to get anonymous messages</div>
         <Link href={"/signup"}>
           <Button>Create Your Account</Button>
         </Link>
