@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import axios, { AxiosError } from "axios";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
@@ -22,62 +22,126 @@ import { ApiResponse } from "@/types/apiResponse";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { messageSchema } from "@/schemas/messageSchema";
-
-// const specialChar = "||";
-
-// const parseStringMessages = (messageString: string): string[] => {
-//   return messageString.split(specialChar);
-// };
-
-// const initialMessageString =
-//   "What's your favorite movie?||Do you have any pets?||What's your dream job?";
+import { io, Socket } from "socket.io-client";
+import { LiveChat } from "@/components/LiveChat";
 
 export default function SendMessage() {
   const params = useParams<{ username: string }>();
   const username = params.username;
 
   const [isLoading, setIsLoading] = useState(false);
-  // const [isSuggestLoading, setIsSuggestLoading] = useState(false);
+  const [isLiveChatActive, setIsLiveChatActive] = useState(false);
+  const [socket, setSocket] = useState<Socket | null>(null);
+  const [chatStatus, setChatStatus] = useState<
+    "idle" | "requesting" | "active" | "declined"
+  >("idle");
+  const [chatRoomId, setChatRoomId] = useState<string | null>(null);
+  const chatContainerRef = React.useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const checkLiveChatStatus = async () => {
+      try {
+        const response = await axios.get(
+          `/api/check-live-chat-status?username=${username}`
+        );
+        setIsLiveChatActive(response.data.isLiveChatActive);
+      } catch {
+        console.error("Failed to check live chat status");
+      }
+    };
+    checkLiveChatStatus();
+  }, [username]);
+
+  const startLiveChat = async () => {
+    // Check live chat status first
+    try {
+      const response = await axios.get(
+        `/api/check-live-chat-status?username=${username}`
+      );
+      setIsLiveChatActive(response.data.isLiveChatActive);
+
+      if (!response.data.isLiveChatActive) {
+        toast({
+          title: "User Unavailable",
+          description: "This user is not available for live chat right now.",
+          variant: "destructive",
+        });
+        return;
+      }
+    } catch {
+      toast({
+        title: "Error",
+        description: "Failed to check live chat status. Please try again.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const newSocket = io({
+      transports: ["websocket"],
+    });
+    setSocket(newSocket);
+    setChatStatus("requesting");
+
+    newSocket.on("connect", () => {
+      console.log("Connected with socket ID:", newSocket.id);
+      newSocket.emit("request_chat", { to: username, from: "Anonymous" });
+    });
+
+    newSocket.on("disconnect", (reason) => {
+      console.log("Socket disconnected:", reason);
+    });
+
+    newSocket.on("connect_error", (error) => {
+      console.log("Socket connection error:", error);
+    });
+
+    newSocket.on("chat_accepted", (data) => {
+      console.log("Chat accepted event received", data);
+      const { roomId } = data;
+      setChatRoomId(roomId);
+
+      // Auto-start chat - transition directly to active
+      setChatStatus("active");
+      console.log("State changed to active, roomId:", roomId);
+      toast({
+        title: "Chat Started",
+        description: "You are now connected with the owner!",
+      });
+
+      // Scroll to chat after a brief delay to ensure it's rendered
+      setTimeout(() => {
+        chatContainerRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      }, 100);
+    });
+
+    newSocket.on("chat_declined", () => {
+      setChatStatus("declined");
+      toast({
+        title: "Request Declined",
+        description: "The owner declined your chat request.",
+        variant: "destructive",
+      });
+      newSocket.disconnect();
+    });
+
+    newSocket.on("chat_busy", (data) => {
+      console.log("Owner is busy:", data);
+      setChatStatus("idle");
+      toast({
+        title: "Owner is Busy",
+        description: data.message || "The owner is currently in another chat. Please try again later.",
+        variant: "destructive",
+      });
+      newSocket.disconnect();
+    });
+  };
 
   const form = useForm<z.infer<typeof messageSchema>>({
     resolver: zodResolver(messageSchema),
   });
 
   const messageContent = form.watch("content");
-
-  // const handleMessageClick = (message: string) => {
-  //   form.setValue("content", message);
-  // };
-
-  // const [suggestedMessages, setSuggestedMessages] = useState<string[]>(
-  //   parseStringMessages(initialMessageString)
-  // );
-
-  // const fetchSuggestedMessages = async () => {
-  //   setIsSuggestLoading(true);
-  //   try {
-  //     const response = await axios.post("/api/suggest-message");
-  //     // Handle both string (separated by ||) and array responses
-  //     let messages: string[] = [];
-  //     if (response.data.questions) {
-  //       if (Array.isArray(response.data.questions)) {
-  //         messages = response.data.questions;
-  //       } else if (typeof response.data.questions === "string") {
-  //         messages = parseStringMessages(response.data.questions);
-  //       }
-  //     }
-  //     setSuggestedMessages(messages);
-  //   } catch (error) {
-  //     console.error("Error fetching messages:", error);
-  //     toast({
-  //       title: "Error",
-  //       description: "Failed to fetch suggested messages",
-  //       variant: "destructive",
-  //     });
-  //   } finally {
-  //     setIsSuggestLoading(false);
-  //   }
-  // };
 
   const onSubmit = async (data: z.infer<typeof messageSchema>) => {
     setIsLoading(true);
@@ -144,42 +208,78 @@ export default function SendMessage() {
         </form>
       </Form>
 
-      {/* <div className="space-y-4 my-8">
-        <div className="space-y-2">
-          <Button
-            onClick={fetchSuggestedMessages}
-            className="my-4"
-            disabled={isSuggestLoading}
-          >
-            {isSuggestLoading ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Loading...
-              </>
-            ) : (
-              "Suggest Messages"
-            )}
-          </Button>
-          <p>Click on any message below to select it.</p>
-        </div>
-        <Card>
-          <CardHeader>
-            <h3 className="text-xl font-semibold">Messages</h3>
-          </CardHeader>
-          <CardContent className="flex flex-col space-y-4">
-            {suggestedMessages.map((message, index) => (
-              <Button
-                key={index}
-                variant="outline"
-                className="mb-2 text-wrap h-auto justify-start text-left"
-                onClick={() => handleMessageClick(message)}
-              >
-                {message}
-              </Button>
-            ))}
-          </CardContent>
-        </Card>
-      </div> */}
+      <Separator className="my-6" />
+
+      {/* Live Chat Section - Always visible */}
+      <div className="mt-6">
+        <h2 className="text-2xl font-bold mb-4 text-center">
+          Live Communication
+        </h2>
+
+        {chatStatus === "idle" && (
+          <div className="text-center">
+            <p className="text-gray-600 mb-4">
+              Want to chat live with @{username}? Start a real-time conversation!
+            </p>
+            <Button onClick={startLiveChat} variant="secondary" size="lg">
+              Start Live Communication
+            </Button>
+          </div>
+        )}
+
+        {chatStatus === "requesting" && (
+          <div className="text-center space-y-4">
+            <Loader2 className="mx-auto h-8 w-8 animate-spin text-blue-600" />
+            <p className="text-gray-700 font-medium">Waiting for owner to accept...</p>
+            <p className="text-sm text-gray-500">The owner will be notified of your request</p>
+            <Button
+              onClick={() => {
+                setChatStatus("idle");
+                socket?.disconnect();
+              }}
+              variant="outline"
+              size="sm"
+            >
+              Cancel Request
+            </Button>
+          </div>
+        )}
+
+        {chatStatus === "active" && socket && chatRoomId && (
+          <div ref={chatContainerRef}>
+            <LiveChat
+              key={chatRoomId}
+              socket={socket}
+              username={username as string}
+              isOwner={false}
+              roomId={chatRoomId}
+              onTerminate={() => {
+                setChatStatus("idle");
+                setChatRoomId(null);
+                socket.disconnect();
+                toast({
+                  title: "Chat Ended",
+                  description: "The live chat session has ended.",
+                });
+              }}
+            />
+          </div>
+        )}
+
+        {chatStatus === "declined" && (
+          <div className="text-center space-y-4 bg-red-50 p-6 rounded-lg border border-red-200">
+            <p className="text-red-700 font-medium">Chat request was declined.</p>
+            <p className="text-sm text-gray-600">The owner is not available to chat right now.</p>
+            <Button
+              onClick={() => setChatStatus("idle")}
+              variant="outline"
+            >
+              Try Again
+            </Button>
+          </div>
+        )}
+      </div>
+
       <Separator className="my-6" />
       <div className="text-center">
         <div className="mb-4">Create your profile and share the links with other to get anonymous messages</div>
@@ -187,6 +287,8 @@ export default function SendMessage() {
           <Button>Create Your Account</Button>
         </Link>
       </div>
+
+
     </div>
   );
 }

@@ -1,5 +1,6 @@
 "use client";
 
+import React, { useState, useEffect, useCallback } from "react";
 import { MessageCard } from "@/components/MessageCard";
 import { useToast } from "@/hooks/use-toast";
 import { Message } from "@/model/User";
@@ -8,17 +9,27 @@ import { ApiResponse } from "@/types/apiResponse";
 import { zodResolver } from "@hookform/resolvers/zod";
 import axios, { AxiosError } from "axios";
 import { useSession } from "next-auth/react";
-import { useCallback, useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Loader2, RefreshCcw } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
+import { io, Socket } from "socket.io-client";
+import { LiveChat } from "@/components/LiveChat";
+import { useChatRequestSubscription } from "@/hooks/useChatRequest";
 
 const Dashboard = () => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isSwitchLoading, setIsSwitchLoading] = useState(false);
+  const [isLiveChatActive, setIsLiveChatActive] = useState(false);
+  const [socket, setSocket] = useState<Socket | null>(null);
+  const socketRef = React.useRef<Socket | null>(null);
+  const [activeChat, setActiveChat] = useState<{
+    socketId: string;
+    username: string;
+    roomId: string;
+  } | null>(null);
   const { toast } = useToast();
 
   const handleDeleteMessage = (messageId: string) => {
@@ -85,7 +96,50 @@ const Dashboard = () => {
     if (!session || !session.user) return;
     fetchMessages();
     fetchAcceptMessage();
+    fetchLiveChatStatus();
+
+    const newSocket = io({
+      transports: ["websocket"],
+    });
+    setSocket(newSocket);
+    socketRef.current = newSocket;  // Keep ref updated
+
+    newSocket.on("connect", () => {
+      console.log("Connected to socket server", newSocket.id);
+      if (session?.user?.username) {
+        newSocket.emit("join_room", session.user.username);
+      }
+    });
+
+    return () => {
+      newSocket.disconnect();
+      socketRef.current = null;
+    };
   }, [session, setValue, fetchAcceptMessage, fetchMessages]);
+
+  const fetchLiveChatStatus = async () => {
+    try {
+      const response = await axios.get("/api/toggle-chat");
+      setIsLiveChatActive(response.data.isLiveChatActive);
+    } catch (error) {
+      console.error("Failed to fetch live chat status", error);
+    }
+  };
+
+  useChatRequestSubscription({
+    socketRef,  // Pass the ref instead of the socket
+    onAccept: (data) => {
+      // Room ID is now generated in the hook
+      setActiveChat({
+        socketId: data.socketId,
+        username: "Anonymous",
+        roomId: data.roomId
+      });
+    },
+    onDecline: () => {
+      setActiveChat(null);
+    },
+  });
 
   //handle switch change
   const handleSwitchChange = async () => {
@@ -103,6 +157,24 @@ const Dashboard = () => {
         title: "Error",
         description:
           axiosError.response?.data.message || "Failed to fetch message",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleLiveChatSwitchChange = async () => {
+    try {
+      const response = await axios.post("/api/toggle-chat", {
+        isLiveChatActive: !isLiveChatActive,
+      });
+      setIsLiveChatActive(!isLiveChatActive);
+      toast({
+        title: response.data.message,
+      });
+    } catch {
+      toast({
+        title: "Error",
+        description: "Failed to update live chat status",
         variant: "destructive",
       });
     }
@@ -160,6 +232,33 @@ const Dashboard = () => {
           Accept Messages: {acceptMessage ? "On" : "Off"}
         </span>
       </div>
+      <div className="mb-4">
+        <Switch
+          checked={isLiveChatActive}
+          onCheckedChange={handleLiveChatSwitchChange}
+        />
+        <span className="ml-2">
+          Live Chat: {isLiveChatActive ? "Active" : "Inactive"}
+        </span>
+      </div>
+
+      {activeChat && socket && (
+        <div className="mb-8">
+          <LiveChat
+            socket={socket}
+            username={activeChat.username}
+            isOwner={true}
+            roomId={activeChat.roomId}
+            onTerminate={() => {
+              setActiveChat(null);
+              toast({
+                title: "Chat Ended",
+                description: "The live chat session has ended.",
+              });
+            }}
+          />
+        </div>
+      )}
       <Separator />
 
       <Button

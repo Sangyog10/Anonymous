@@ -13,6 +13,7 @@ export interface User extends Document {
   verifyCodeExpiry: Date;
   isVerified: boolean;
   isAcceptingMessage: boolean;
+  isLiveChatActive: boolean;
   messages: Message[];
 }
 
@@ -63,6 +64,10 @@ const UserSchema: Schema<User> = new mongoose.Schema({
   isAcceptingMessage: {
     type: Boolean,
     default: true,
+  },
+  isLiveChatActive: {
+    type: Boolean,
+    default: false,
   },
   messages: [MessageSchema],
 });
