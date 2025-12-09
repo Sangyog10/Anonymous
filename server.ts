@@ -3,6 +3,7 @@ import { parse } from "url";
 import next from "next";
 import { Server } from "socket.io";
 
+
 const dev = process.env.NODE_ENV !== "production";
 const hostname = "localhost";
 const port = 3000;
@@ -24,13 +25,69 @@ app.prepare().then(() => {
 
     const io = new Server(httpServer, {
         cors: {
-            origin: "*",
-            methods: ["GET", "POST"]
-        }
+            origin: process.env.NODE_ENV === 'production'
+                ? (process.env.ALLOWED_ORIGINS?.split(','))
+                : "*",
+            methods: ["GET", "POST"],
+            credentials: true
+        },
+        // Connection limits for DoS protection
+        maxHttpBufferSize: 1e6, // 1MB max message size
+        pingTimeout: 60000,
+        pingInterval: 25000,
     });
 
     // Track active chat sessions: username -> { roomId, ownerSocketId }
     const activeChatSessions = new Map<string, { roomId: string; ownerSocketId: string }>();
+
+    // Rate limiting
+    const messageLimiters = new Map<string, { count: number; resetTime: number }>();
+    const requestLimiters = new Map<string, { count: number; resetTime: number }>();
+
+    const MESSAGE_RATE_LIMIT = 10; // messages per window
+    const RATE_WINDOW_MS = 10000; // 10 seconds
+    const REQUEST_RATE_LIMIT = 3; // chat requests per window  
+    const REQUEST_WINDOW_MS = 60000; // 1 minute
+
+    function checkRateLimit(
+        socketId: string,
+        limiters: Map<string, { count: number; resetTime: number }>,
+        limit: number,
+        windowMs: number
+    ): boolean {
+        const now = Date.now();
+        const limiter = limiters.get(socketId);
+
+        if (!limiter || now > limiter.resetTime) {
+            limiters.set(socketId, {
+                count: 1,
+                resetTime: now + windowMs
+            });
+            return true;
+        }
+
+        if (limiter.count >= limit) {
+            return false;
+        }
+
+        limiter.count++;
+        return true;
+    }
+
+    // Socket middleware for connection throttling
+    io.use((socket, next) => {
+        const ip = socket.handshake.address;
+
+        // Limit connections per IP
+        const connectionsFromIP = Array.from(io.sockets.sockets.values())
+            .filter(s => s.handshake.address === ip).length;
+
+        if (connectionsFromIP > 5) {
+            return next(new Error('Too many connections from this IP'));
+        }
+
+        next();
+    });
 
     io.on("connection", (socket) => {
 
@@ -39,42 +96,68 @@ app.prepare().then(() => {
         });
 
         socket.on("request_chat", (data) => {
-            const { to, from } = data;
+            try {
+                const { to, from } = data;
 
-            // Check if owner (username: 'to') is already in a chat
-            if (activeChatSessions.has(to)) {
-                socket.emit("chat_busy", {
-                    message: "The owner is currently in another chat. Please try again later."
-                });
-                return;
+                // Rate limit chat requests
+                if (!checkRateLimit(socket.id, requestLimiters, REQUEST_RATE_LIMIT, REQUEST_WINDOW_MS)) {
+                    socket.emit("rate_limited", {
+                        message: "Too many chat requests. Please wait before trying again."
+                    });
+                    return;
+                }
+
+                // Check if owner (username: 'to') is already in a chat
+                if (activeChatSessions.has(to)) {
+                    socket.emit("chat_busy", {
+                        message: "The owner is currently in another chat. Please try again later."
+                    });
+                    return;
+                }
+
+                io.to(to).emit("request_chat", { from, socketId: socket.id });
+            } catch (error) {
+                console.error('Error in request_chat:', error);
+                socket.emit("error", { message: "An error occurred. Please try again." });
             }
-
-            io.to(to).emit("request_chat", { from, socketId: socket.id });
         });
 
         socket.on("accept_chat", (data) => {
-            const { to, from, roomId } = data;
+            try {
+                const { to, from, roomId } = data;
 
-            // Both parties join the same room
-            socket.join(roomId);
-
-            // Get the requester's socket and emit directly to it
-            const requesterSocket = io.sockets.sockets.get(to);
-            if (requesterSocket) {
-
+                // Get the owner's username from their rooms
                 const ownerRooms = Array.from(socket.rooms);
                 const ownerUsername = ownerRooms.find(room => room !== socket.id); // Username room
 
+                // Mark owner as busy BEFORE joining the room to prevent race conditions
                 if (ownerUsername) {
                     activeChatSessions.set(ownerUsername, {
                         roomId,
                         ownerSocketId: socket.id
                     });
+                    console.log(`✓ Marked ${ownerUsername} as busy in room ${roomId}`);
                 }
 
-                requesterSocket.emit("chat_accepted", { from, roomId });
-            } else {
-                console.error(`✗ ERROR: Could not find socket ${to} to accept chat`);
+                // Both parties join the same room
+                socket.join(roomId);
+
+                // Get the requester's socket and emit directly to it
+                const requesterSocket = io.sockets.sockets.get(to);
+                if (requesterSocket) {
+                    requesterSocket.join(roomId);
+                    requesterSocket.emit("chat_accepted", { from, roomId });
+                    console.log(`✓ Chat accepted: requester ${to} and owner ${socket.id} joined room ${roomId}`);
+                } else {
+                    console.error(`✗ ERROR: Could not find socket ${to} to accept chat`);
+                    // Clean up if requester is gone
+                    if (ownerUsername) {
+                        activeChatSessions.delete(ownerUsername);
+                    }
+                }
+            } catch (error) {
+                console.error('Error in accept_chat:', error);
+                socket.emit("error", { message: "An error occurred. Please try again." });
             }
         });
 
@@ -88,15 +171,27 @@ app.prepare().then(() => {
             }
         });
 
-        socket.on("join_chat_room", (data) => {
-            const { roomId } = data;
-            socket.join(roomId);
-        });
-
         socket.on("send_message", (data) => {
-            const { roomId, message, from } = data;
-            // Broadcast to room except sender
-            socket.to(roomId).emit("receive_message", { message, from });
+            try {
+                const { roomId, message, from } = data;
+
+                // Rate limit check
+                if (!checkRateLimit(socket.id, messageLimiters, MESSAGE_RATE_LIMIT, RATE_WINDOW_MS)) {
+                    socket.emit("rate_limited", {
+                        message: "You're sending messages too quickly. Please slow down."
+                    });
+                    return;
+                }
+
+                // Broadcast message
+                socket.to(roomId).emit("receive_message", {
+                    message: message,
+                    from
+                });
+            } catch (error) {
+                console.error('Error in send_message:', error);
+                socket.emit("error", { message: "Failed to send message. Please try again." });
+            }
         });
 
         socket.on("terminate_chat", (data) => {

@@ -1,7 +1,5 @@
 import { NextResponse } from "next/server";
 
-export const runtime = "edge";
-
 const questionsList = [
   "What's a hobby you've always wanted to try?",
   "If you could have dinner with any historical figure, who would it be?",

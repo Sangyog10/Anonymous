@@ -26,6 +26,7 @@ export function useChatRequestSubscription({
         socket.on("request_chat", (data) => {
             console.log("Incoming chat request data:", data);
             console.log("Requester Socket ID:", data.socketId);
+
             toast({
                 title: "Incoming Chat Request",
                 description: "Someone wants to start a live chat with you.",
@@ -36,44 +37,41 @@ export function useChatRequestSubscription({
                             onClick={() => {
                                 const currentSocket = socketRef.current;
                                 console.log("Accept button clicked");
-                                console.log("Socket exists:", !!currentSocket);
-                                console.log("Socket connected:", currentSocket?.connected);
-                                console.log("Socket ID:", currentSocket?.id);
-                                console.log("Accepting chat for requester socket:", data.socketId);
 
                                 if (!currentSocket || !currentSocket.connected) {
-                                    console.error("Socket not connected! Cannot accept chat.");
                                     toast({
                                         title: "Error",
-                                        description: "Connection lost. Please refresh and try again.",
+                                        description:
+                                            "Connection lost. Please refresh and try again.",
                                         variant: "destructive",
                                     });
                                     return;
                                 }
 
-                                // Generate room ID here and pass it along
-                                const roomId = `chat_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-                                console.log("Generated room ID:", roomId);
-                                console.log("Emitting accept_chat event...");
+                                const roomId = `chat_${Date.now()}_${Math.random()
+                                    .toString(36)
+                                    .substr(2, 9)}`;
 
                                 currentSocket.emit("accept_chat", {
                                     to: data.socketId,
                                     from: "Owner",
-                                    roomId
+                                    roomId,
                                 });
 
-                                console.log("accept_chat event emitted, calling onAccept callback");
                                 onAccept({ socketId: data.socketId, roomId });
                             }}
                         >
                             Accept
                         </ToastAction>
+
                         <ToastAction
                             altText="Decline"
                             onClick={() => {
                                 const currentSocket = socketRef.current;
                                 if (currentSocket && currentSocket.connected) {
-                                    currentSocket.emit("decline_chat", { to: data.socketId });
+                                    currentSocket.emit("decline_chat", {
+                                        to: data.socketId,
+                                    });
                                 }
                                 onDecline();
                             }}
@@ -82,15 +80,14 @@ export function useChatRequestSubscription({
                         </ToastAction>
                     </div>
                 ),
-                duration: 10000, // 10 seconds to accept
+                duration: 10000,
             });
         });
 
+        // cleanup now uses the *captured* socket
         return () => {
-            const socket = socketRef.current;
-            if (socket) {
-                socket.off("request_chat");
-            }
+            socket.off("request_chat");
         };
     }, [socketRef, toast, onAccept, onDecline]);
+
 }

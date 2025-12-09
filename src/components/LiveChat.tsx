@@ -16,6 +16,8 @@ import {
     AlertDialogHeader,
     AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { useToast } from "@/hooks/use-toast";
+import { validateChatMessage, CHAT_MESSAGE_MAX_LENGTH } from "@/lib/validation";
 
 interface Message {
     from: string;
@@ -40,39 +42,89 @@ export function LiveChat({
     const [messages, setMessages] = useState<Message[]>([]);
     const [inputMessage, setInputMessage] = useState("");
     const [showTerminateDialog, setShowTerminateDialog] = useState(false);
+    const { toast } = useToast();
 
     useEffect(() => {
-        // Join the chat room
-        socket.emit("join_chat_room", { roomId });
-
-        socket.on("receive_message", (data: Message) => {
-            setMessages((prev) => [...prev, data]);
+        // Listen for incoming messages
+        socket.on("receive_message", (data) => {
+            setMessages((prev) => [
+                ...prev,
+                { from: data.from, message: data.message },
+            ]);
         });
 
+        // Listen for chat termination
         socket.on("chat_terminated", () => {
-            alert("Chat ended by the other user.");
             onTerminate();
+        });
+
+        // Security event handlers
+        socket.on("rate_limited", (data) => {
+            toast({
+                title: "Slow Down",
+                description: data.message,
+                variant: "destructive",
+            });
+        });
+
+        socket.on("message_blocked", (data) => {
+            toast({
+                title: "Message Blocked",
+                description: data.reason,
+                variant: "destructive",
+            });
+        });
+
+        socket.on("message_error", (data) => {
+            toast({
+                title: "Invalid Message",
+                description: data.error,
+                variant: "destructive",
+            });
+        });
+
+        socket.on("error", (data) => {
+            toast({
+                title: "Error",
+                description: data.message,
+                variant: "destructive",
+            });
         });
 
         return () => {
             socket.off("receive_message");
             socket.off("chat_terminated");
+            socket.off("rate_limited");
+            socket.off("message_blocked");
+            socket.off("message_error");
+            socket.off("error");
         };
-    }, [socket, onTerminate, roomId]);
+    }, [socket, roomId, onTerminate, toast]);
 
     const sendMessage = () => {
         if (!inputMessage.trim()) return;
 
+        // Validate and sanitize
+        const validation = validateChatMessage(inputMessage);
+        if (!validation.valid) {
+            toast({
+                title: "Invalid Message",
+                description: validation.error,
+                variant: "destructive",
+            });
+            return;
+        }
+
         socket.emit("send_message", {
             roomId,
-            message: inputMessage,
+            message: validation.sanitized,
             from: isOwner ? "Owner" : "Anonymous",
         });
 
-        // Optimistic update
+        // Optimistic update with sanitized message
         setMessages((prev) => [
             ...prev,
-            { from: "Me", message: inputMessage },
+            { from: "Me", message: validation.sanitized! },
         ]);
         setInputMessage("");
     };
@@ -125,7 +177,13 @@ export function LiveChat({
                     value={inputMessage}
                     onChange={(e) => setInputMessage(e.target.value)}
                     placeholder="Type a message..."
-                    onKeyDown={(e) => e.key === "Enter" && sendMessage()}
+                    onKeyDown={(e) => {
+                        if (e.key === "Enter" && !e.shiftKey) {
+                            e.preventDefault();
+                            sendMessage();
+                        }
+                    }}
+                    maxLength={CHAT_MESSAGE_MAX_LENGTH}
                 />
                 <Button onClick={sendMessage}>
                     <Send className="h-4 w-4" />

@@ -30,7 +30,7 @@ export default function SendMessage() {
   const username = params.username;
 
   const [isLoading, setIsLoading] = useState(false);
-  const [isLiveChatActive, setIsLiveChatActive] = useState(false);
+  const [, setIsLiveChatActive] = useState(false);
   const [socket, setSocket] = useState<Socket | null>(null);
   const [chatStatus, setChatStatus] = useState<
     "idle" | "requesting" | "active" | "declined"
